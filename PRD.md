@@ -1,338 +1,210 @@
-# Clausely — Autonomous Contract Extraction & Compliance Auditor
+# Clausely — Product Requirements Document (PRD)
 
-**Product Requirements Document (Final)**
-
----
-
-## 1. Product Goal
-
-Build a multi-tenant API system that accepts business contracts, identifies their type, extracts structured data, validates it, checks it against company-defined compliance rules, automatically retries failed extractions, and pauses for human review on high-risk exceptions — with full traceability, test coverage, and measured accuracy.
+**Autonomous Contract Extraction & Compliance Auditor with Human-in-the-Loop**
 
 ---
 
-## 2. Supported Contract Types
+## 1. Objective
 
-1. **SaaS / Vendor Agreement**
-2. **NDA**
-3. **Professional Services Agreement (PSA)**
-
-An unsupported contract type returns HTTP `422` with error code `UNSUPPORTED_CONTRACT_TYPE`. It is a request-time error, not a stored document status.
+Build an API system that extracts structured data from SaaS and vendor contracts, validates schema integrity with Pydantic, heals extraction errors using an LLM self-correction feedback loop, audits extracted terms against configurable compliance rules, and pauses execution via LangGraph state checkpointing when human review is required.
 
 ---
 
-## 3. Users & Roles
+## 2. Core Design Principle: Zero Hardcoded Values
 
-The user is a **company administrator** or **contract reviewer**.
+No model names, retry counts, database paths, or compliance thresholds are hardcoded in the codebase. Every parameter is read from environment variables via a centralized configuration module.
 
-| Role | Can do |
-|---|---|
-| `admin` | Manage policies, add users, submit/process documents, review |
-| `reviewer` | Submit/process documents, perform human review |
+If a rate limit or threshold needs adjustment, it is modified in `.env` without changing source code.
 
-Each user belongs to exactly one company.
+---
 
-**User entity:**
-```json
-{
-  "id": "usr_123",
-  "email": "",
-  "password_hash": "",
-  "role": "admin | reviewer",
-  "company_id": "comp_456",
-  "created_at": ""
-}
+## 3. Extraction Schema (`VendorContract`)
+
+```python
+class VendorContract(BaseModel):
+    vendor_name: str
+    customer_name: str
+    effective_date: datetime.date
+    expiration_date: datetime.date
+    annual_value: float = Field(..., ge=0.0, description="Annual contract value in USD")
+    liability_cap_amount: float = Field(..., ge=0.0, description="Total liability cap in USD")
+    governing_law: str = Field(..., description="Jurisdiction code (e.g., US-DE, US-NY, US-CA, UK)")
+    auto_renewal: bool
+    renewal_notice_days: int = Field(default=0, ge=0, description="Days notice required to prevent renewal")
+    termination_notice_days: int = Field(default=0, ge=0, description="Notice days for termination for convenience")
 ```
 
 ---
 
-## 4. Authentication & Multi-Tenancy
+## 4. System Workflow & State Machine
 
-- JWT-based auth. Payload: `{ user_id, company_id, role, exp }`.
-- `POST /auth/register` creates a new company **and** its first admin user in one call.
-- `POST /auth/login` authenticates an existing user and returns a JWT.
-- `POST /companies/{id}/users` (admin-only) adds additional users to an existing company.
-- **Every database query is scoped by `company_id` resolved from the JWT** — enforced at the query layer, not just the API gate. No code path may return or reference another company's data.
+The workflow runs on a LangGraph `StateGraph` backed by a durable SQLite checkpointer.
 
----
-
-## 5. Input
-
-```
-PDF contract (machine-readable text)
-company_id (resolved from JWT, not client-supplied)
-```
-
-Before processing: compute a file hash and check for a duplicate under the same `company_id`. If found, return the existing `document_id` instead of reprocessing.
-
----
-
-## 6. Extraction Schema (Design Principle)
-
-Every field a compliance rule can touch is typed — number, boolean, enum, or date. Free text is never used in rule evaluation; it's kept as reference-only context.
-
-Every extracted field carries:
-- The typed value
-- `source_excerpt` — exact contract text it was extracted from
-- `confidence` — model's self-reported score (0–1)
-
-**`governing_law`** is constrained to a fixed jurisdiction enum list (e.g., US state codes + common non-US jurisdictions), maintained as static reference data — not free text — so the `in` operator has guaranteed valid values to compare against.
-
-### SaaS / Vendor
-```json
-{
-  "parties": [{ "role": "vendor", "name": "" }, { "role": "customer", "name": "" }],
-  "effective_date": "2026-01-01",
-  "expiration_date": "2027-01-01",
-  "contract_value": { "amount": 0, "currency": "USD" },
-  "payment_terms_days": 30,
-  "auto_renewal": { "enabled": true, "notice_days": 60 },
-  "termination_notice_days": 30,
-  "sla_uptime_percent": 99.9,
-  "liability_cap": { "amount": 0, "currency": "USD" },
-  "has_dpa_clause": true,
-  "governing_law": "US-DE"
-}
+```text
+[Input Document]
+       │
+       ▼
+[extract_contract] ◄──────────────────────────────┐
+       │                                          │
+       ▼                                          │ (Invalid &
+[validate_extraction]                             │  retries < MAX_EXTRACTION_RETRIES)
+       │                                          │
+       ├── (Validation Error) ──► [Self-Correct] ──┘
+       │                                │
+       │                         (retries >= MAX_EXTRACTION_RETRIES)
+       │                                │
+       ▼ (Valid)                        ▼
+[audit_compliance]            [Flag: EXTRACTION_FAILED]
+       │                                │
+       ▼                                │
+ [High Risk?]                           │
+   │      │                             │
+ (No)   (Yes)                           │
+   │      └─────────────────────────────┤
+   │                                    ▼
+   │                         [human_review_interrupt]
+   │                         (Pauses graph via interrupt())
+   │                                    │
+   │                          [Human Review API Call]
+   │                          (Approve / Reject / Edit)
+   │                                    │
+   │                         [Resume Graph Execution]
+   │                                    │
+   ▼                                    ▼
+[save_document] ────────────────────────┘
+       │
+       ▼
+  [COMPLETED]
 ```
 
-### NDA
-```json
-{
-  "parties": [{ "role": "disclosing_party", "name": "" }, { "role": "receiving_party", "name": "" }],
-  "effective_date": "2026-01-01",
-  "confidentiality_period_months": 24,
-  "is_mutual": true,
-  "termination_notice_days": 30,
-  "governing_law": "US-DE"
-}
-```
+### Graph State (`ContractState`)
 
-### PSA
-```json
-{
-  "parties": [{ "role": "client", "name": "" }, { "role": "provider", "name": "" }],
-  "effective_date": "2026-01-01",
-  "payment_terms_days": 30,
-  "ip_ownership": "client",
-  "liability_cap": { "amount": 0, "currency": "USD" },
-  "termination_notice_days": 30,
-  "governing_law": "US-DE"
-}
-```
-
-(Each field object also carries `source_excerpt` and `confidence`, omitted above for brevity.)
-
----
-
-## 7. Document Entity & Metadata
-
-```json
-{
-  "id": "doc_123",
-  "company_id": "comp_456",
-  "uploaded_by": "usr_123",
-  "original_filename": "vendor_agreement.pdf",
-  "file_hash": "",
-  "uploaded_at": "2026-01-01T12:00:00Z",
-  "contract_type": "saas",
-  "status": "PENDING",
-  "extracted_data": {},
-  "compliance": {}
-}
+```python
+class ContractState(TypedDict):
+    document_id: str
+    raw_text: str
+    extracted_data: Optional[dict]
+    validation_errors: list[str]
+    retry_count: int
+    compliance_findings: list[dict]
+    requires_human_review: bool
+    human_decision: Optional[str]  # "approve" | "reject" | "edit"
+    reviewer_notes: Optional[str]
+    status: str  # PENDING, PROCESSING, APPROVED, REVIEW_REQUIRED, REJECTED, FAILED
 ```
 
 ---
 
-## 8. Status Enum
+## 5. Node Logic & Execution Rules
 
-```
-PENDING       — uploaded, not yet processed
-PROCESSING    — workflow actively running
-APPROVED      — passed validation + compliance, no high-risk issues
-REVIEW_REQUIRED — paused for human review
-REJECTED      — reviewer rejected the extraction/document
-EXTRACTION_FAILED — failed validation after 3 attempts, unresolved
-```
+### Node 1: `extract_contract`
+* **Input**: `raw_text`, optional `validation_errors` from previous attempt.
+* **LLM Call**: Calls Google Gemini using the model specified by `GEMINI_MODEL` in `.env`.
+* **Prompting**:
+  * On initial attempt (`retry_count == 0`): Requests extraction conforming strictly to the schema.
+  * On retry (`retry_count > 0`): Injects the previous Pydantic `validation_errors` into the prompt, directing the model to correct the invalid fields.
+* **Output**: Raw JSON string.
 
-`review_required` is never stored as a separate boolean — always derived from `status`.
+### Node 2: `validate_extraction`
+* **Input**: Raw JSON string from `extract_contract`.
+* **Logic**: Validates output against `VendorContract`.
+  * **Valid**: Sets `extracted_data = model.model_dump()`, clears `validation_errors`, routes to `audit_compliance`.
+  * **Invalid**: Extracts error messages, increments `retry_count`.
+    * If `retry_count < MAX_EXTRACTION_RETRIES`: Routes back to `extract_contract`.
+    * If `retry_count >= MAX_EXTRACTION_RETRIES`: Sets `status = "FAILED"`, `requires_human_review = True`, routes to `human_review_interrupt`.
 
----
+### Node 3: `audit_compliance`
+* **Input**: `extracted_data`.
+* **Logic**: Pure Python checks against thresholds loaded from environment variables:
+  1. **Liability Cap**: `liability_cap_amount <= min(POLICY_LIABILITY_ANNUAL_MULTIPLE * annual_value, POLICY_MAX_LIABILITY_CAP_USD)`. Severity: **HIGH**.
+  2. **Renewal Notice**: If `auto_renewal == True`, `renewal_notice_days >= POLICY_MIN_RENEWAL_NOTICE_DAYS`. Severity: **MEDIUM**.
+  3. **Governing Law**: `governing_law in POLICY_APPROVED_JURISDICTIONS`. Severity: **HIGH**.
+  4. **Termination Notice**: `termination_notice_days >= POLICY_MIN_TERMINATION_NOTICE_DAYS`. Severity: **LOW**.
+* **Routing**:
+  * Any **HIGH** severity violation sets `requires_human_review = True`, `status = "REVIEW_REQUIRED"`, routes to `human_review_interrupt`.
+  * Otherwise, sets `status = "APPROVED"`, routes to `save_document`.
 
-## 9. Company Policies
+### Node 4: `human_review_interrupt`
+* **Input**: Current graph state.
+* **Logic**: Calls LangGraph `interrupt()`, suspending execution and persisting state to the SQLite checkpointer.
+* **Resumption**: Triggered via `POST /documents/{id}/review`:
+  * `approve` → sets `status = "APPROVED"`.
+  * `reject` → sets `status = "REJECTED"`.
+  * `edit` → merges reviewer edits, re-audits compliance, sets `status = "APPROVED"`.
+* Routes to `save_document`.
 
-Stored as data, not hardcoded.
-
-```json
-{
-  "contract_type": "saas",
-  "rules": [
-    { "field": "liability_cap.amount", "operator": ">=", "value": 500000, "severity": "high" },
-    { "field": "governing_law", "operator": "in", "value": ["US-DE", "US-NY"], "severity": "medium" }
-  ]
-}
-```
-
-**Operators:** `==`, `!=`, `>=`, `<=`, `>`, `<`, `exists`, `in`
-
----
-
-## 10. Compliance Engine
-
-- Runs after successful extraction validation.
-- Fully deterministic — no LLM involvement in pass/warning/violation decisions.
-- Each rule evaluates to `PASS`, `WARNING`, or `VIOLATION` with severity `low` / `medium` / `high`.
-- Any `high` severity violation → `REVIEW_REQUIRED`.
-
----
-
-## 11. Workflow (LangGraph)
-
-```
-Upload → status: PENDING
-  ↓
-Dedupe check (file hash + company_id)
-  ↓
-Trigger process → status: PROCESSING
-  ↓
-Classify contract type
-  │
-  ├─ confidence below threshold → status: REVIEW_REQUIRED (flagged: ambiguous classification)
-  └─ confident ↓
-Extract (typed schema)
-  ↓
-Pydantic Validate
-  │
-  ├─ transport/API error (timeout, rate limit, malformed response)
-  │     → retry with backoff (separate counter, max 3)
-  │
-  └─ invalid extraction
-        → Correct (validation error explicitly fed back into prompt)
-        → Validate again (max 3 attempts total)
-  ↓
-valid?
-  ├─ no (after 3 attempts) → status: EXTRACTION_FAILED → Human Review
-  └─ yes ↓
-Compliance Check
-  ↓
-high-risk violation?
-  ├─ no  → status: APPROVED → Store
-  └─ yes → status: REVIEW_REQUIRED (paused, checkpointed) → Human Review → resume → Store
-```
-
-Transport failures (API down, rate-limited, bad JSON) are retried independently from extraction-accuracy failures (wrong field values), with separate counters.
+### Node 5: `save_document`
+* **Input**: Final state.
+* **Logic**: Updates the document record in SQLite with final status, extracted fields, audit findings, and reviewer logs.
 
 ---
 
-## 12. Human-in-the-Loop
+## 6. Persistence Model
 
-Triggered when:
-- A high-severity compliance violation exists.
-- Extraction fails validation after 3 attempts.
-- Classification confidence is below threshold.
-
-Workflow pauses via LangGraph checkpointing (durable, resumable without reprocessing).
-
-**Resume request body:**
-```json
-{
-  "decision": "approve | reject | edit",
-  "edited_data": {},
-  "reviewer_id": "usr_123",
-  "notes": ""
-}
-```
-
-- `approve` → status becomes `APPROVED`, stored as-is.
-- `reject` → status becomes `REJECTED`, document retained with reviewer notes.
-- `edit` → `edited_data` merged into `extracted_data`, re-run through compliance check, then stored.
+### `documents` Table
+* `id` (`String`, Primary Key): Document UUID.
+* `filename` (`String`): File or document title.
+* `raw_text` (`Text`): Source contract text.
+* `status` (`String`): `PENDING`, `PROCESSING`, `APPROVED`, `REVIEW_REQUIRED`, `REJECTED`, `FAILED`.
+* `extracted_data` (`JSON`, Nullable): Final structured data.
+* `compliance_findings` (`JSON`, Nullable): Array of audit findings.
+* `retry_count` (`Integer`): Number of self-correction attempts made.
+* `requires_human_review` (`Boolean`).
+* `reviewer_decision` (`String`, Nullable): `approve`, `reject`, `edit`.
+* `reviewer_notes` (`Text`, Nullable).
+* `created_at` (`DateTime`).
+* `updated_at` (`DateTime`).
 
 ---
 
-## 13. Persistence
+## 7. REST API Endpoints
 
-PostgreSQL stores:
-- Companies, users (with role, company_id)
-- Policies
-- Documents (with file hash, uploader, filename, timestamps)
-- Processing runs (retry counts by failure type)
-- Extracted data (with source excerpts and confidence scores)
-- Compliance results
-- Human review decisions and audit trail (who, what, when, previous vs. new state)
+1. `POST /documents/upload`
+   * Uploads text or PDF file, initializes database record, triggers graph processing.
+   * Returns: `document_id`, `status: "PROCESSING"`.
 
-LangGraph checkpointer stores workflow state for pause/resume.
+2. `GET /documents/{id}`
+   * Returns full record: status, extracted data, compliance findings, review notes.
 
----
+3. `POST /documents/{id}/review`
+   * Body: `{"decision": "approve | reject | edit", "edited_data": {...}, "notes": "..."}`.
+   * Resumes the paused LangGraph workflow and saves terminal state.
 
-## 14. API
-
-```
-POST   /auth/register              → creates company + first admin
-POST   /auth/login                 → returns JWT
-POST   /companies/{id}/users       → (admin) add user to company
-POST   /companies/{id}/policies    → create/update compliance policy
-POST   /documents                  → upload contract (dedup checked)
-POST   /documents/{id}/process     → trigger workflow
-GET    /documents                  → list company's documents (paginated, filterable by status)
-GET    /documents/{id}             → get one document + current state
-GET    /runs/{id}                  → get processing run detail
-POST   /runs/{id}/resume           → submit review decision (see body above)
-GET    /runs/{id}/audit-log        → full history of the run
-```
-
-All endpoints except `/auth/register` and `/auth/login` require a valid JWT; every query is scoped to the token's `company_id`.
+4. `GET /documents`
+   * Lists all processed documents with status filtering.
 
 ---
 
-## 15. Deployment
+## 8. Configuration Parameters (`.env`)
 
-- Dockerized (API + Postgres via docker-compose) — one-command local deployment.
-- Environment-based config for LLM API keys, DB connection, JWT secret.
+```ini
+# LLM Provider
+GEMINI_API_KEY="your-api-key"
+GEMINI_MODEL="gemini-3.5-flash-lite"
 
----
+# Workflow & Self-Healing
+MAX_EXTRACTION_RETRIES=3
 
-## 16. Testing & Evaluation
+# Database
+DATABASE_URL="sqlite:///./clausely.db"
 
-- **Unit tests** on the compliance rule engine (pure deterministic logic — target 90%+ coverage).
-- **Unit tests** on Pydantic schema validation edge cases.
-- **Hand-labeled evaluation set**: 10+ contracts per type (30+ total), with ground-truth field values.
-- Extraction accuracy measured and reported per field and overall.
-- Integration tests covering: full happy path (upload → extract → validate → compliance → store), review-pause/resume path, and multi-tenant isolation (verify company A cannot access company B's data).
+# Compliance Policy Rules
+POLICY_MAX_LIABILITY_CAP_USD=500000
+POLICY_LIABILITY_ANNUAL_MULTIPLE=2.0
+POLICY_MIN_RENEWAL_NOTICE_DAYS=30
+POLICY_MIN_TERMINATION_NOTICE_DAYS=30
+POLICY_APPROVED_JURISDICTIONS="US-DE,US-NY,US-CA,UK"
 
----
-
-## 17. Technology
-
-```
-Python, FastAPI, Pydantic
-LangChain, LangGraph
-Gemini
-PostgreSQL
-Docker
-Pytest
-JWT (e.g., PyJWT)
+# Server
+API_HOST="0.0.0.0"
+API_PORT=8000
 ```
 
 ---
 
-## 18. Success Criteria
+## 9. Explicitly Out of Scope
 
-- 3 contract types processed end-to-end with typed, rule-evaluable schemas.
-- Compliance engine fully deterministic, with measured test coverage.
-- Extraction retries correctly differentiate transport errors from validation errors.
-- Full status lifecycle (`PENDING` → `PROCESSING` → terminal state) correctly represented at every stage.
-- High-risk and low-confidence-classification cases pause and resume correctly via checkpointing.
-- Multi-tenant isolation verified under test — no cross-company data leakage.
-- No duplicate processing on resubmitted files.
-- Real extraction accuracy number reported from a hand-labeled evaluation set.
-- Entire system runs via a single Docker Compose command.
-
----
-
-## 19. Explicitly Out of Scope
-
-- OCR / scanned PDF support
-- Cloud object storage
-- Background job queue (Redis)
-- Observability/tracing dashboards
-- Advanced/visual policy rule builder
-- Additional contract types beyond the three listed
-- Frontend UI
+* Hardcoded fallback models or hardcoded policy rules.
+* User authentication and multi-tenancy.
+* Scanned OCR (only machine-readable text/PDFs supported).
+* Custom frontend UI (FastAPI Swagger UI serves as the interface).

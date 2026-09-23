@@ -8,5 +8,6 @@ sqlalchemy>=2.0.0
 langchain-google-genai>=1.0.0
 langgraph>=0.2.0
 langgraph-checkpoint-sqlite>=2.0.0
+aiosqlite>=0.20.0
 pypdf>=4.0.0
 pytest>=8.0.0

@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -14,3 +15,10 @@ class VendorContract(BaseModel):
     auto_renewal: bool = Field(..., description="Whether the contract automatically renews")
     renewal_notice_days: int = Field(default=0, ge=0, description="Days notice required to prevent renewal")
     termination_notice_days: int = Field(default=0, ge=0, description="Notice days for termination for convenience")
+
+
+# Request payload for human-in-the-loop contract review decisions
+class ReviewRequest(BaseModel):
+    decision: Literal["approve", "reject", "edit"] = Field(..., description="Review action: approve, reject, or edit")
+    edited_data: Optional[dict[str, Any]] = Field(default=None, description="Edited contract fields when decision is edit")
+    notes: Optional[str] = Field(default=None, description="Optional comments from the human reviewer")

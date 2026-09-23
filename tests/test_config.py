@@ -6,7 +6,7 @@ from app.config import Settings, get_settings
 # Tests that default settings match specifications from the PRD
 def test_default_settings():
     settings = Settings(_env_file=None)
-    assert settings.GEMINI_MODEL == "gemini-2.5-flash"
+    assert settings.GEMINI_MODEL == "gemini-3.5-flash-lite"
     assert settings.MAX_EXTRACTION_RETRIES == 3
     assert settings.DATABASE_URL == "sqlite:///./clausely.db"
     assert settings.POLICY_MAX_LIABILITY_CAP_USD == 500000.0

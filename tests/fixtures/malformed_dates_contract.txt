@@ -1,0 +1,9 @@
+CONSULTING AND SUPPORT AGREEMENT
+
+This Agreement is entered into between Precision Analytics Inc. ("Vendor") and Acme Global Corp. ("Customer") starting April 1, 2025 and expiring April 1, 2026.
+
+1. ANNUAL VALUE
+The annual fee is $60,000.00 USD with a total liability cap of $100,000.00 USD.
+
+2. TERMS
+Auto-renewal is enabled with 30 days renewal notice and 30 days termination notice. Governing law is New York (US-NY).

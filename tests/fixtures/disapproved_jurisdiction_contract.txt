@@ -1,0 +1,15 @@
+SOFTWARE LICENSE AGREEMENT
+
+This Software License Agreement ("Agreement") is effective as of March 1, 2025 through March 1, 2026, between IslandSoft Ltd. ("Vendor") and Acme Global Corp. ("Customer").
+
+1. ANNUAL LICENSE FEE
+Annual license fee: $80,000.00 USD.
+
+2. LIABILITY CAP
+Maximum total liability is capped at $120,000.00 USD.
+
+3. RENEWAL AND TERMINATION
+No automatic renewal applies. Termination for convenience requires 45 days prior written notice.
+
+4. GOVERNING LAW
+This Agreement shall be governed by the laws of the Cayman Islands (KY-CAYMAN).

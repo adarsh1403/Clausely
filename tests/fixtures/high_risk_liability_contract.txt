@@ -1,0 +1,15 @@
+ENTERPRISE VENDOR SERVICES AGREEMENT
+
+This Enterprise Vendor Services Agreement ("Agreement") is entered into as of February 1, 2025 ("Effective Date") through February 1, 2026 ("Expiration Date"), by and between MegaData Systems LLC ("Vendor") and Acme Global Corp. ("Customer").
+
+1. ANNUAL VALUE
+The total annual subscription value is $150,000.00 USD.
+
+2. LIMITATION OF LIABILITY
+Aggregate liability under this Agreement is capped at $900,000.00 USD, which exceeds standard corporate policy thresholds.
+
+3. RENEWAL AND TERMINATION
+This Agreement does not automatically renew. Either party may terminate for convenience with 30 days written notice.
+
+4. GOVERNING LAW
+This Agreement is governed by the laws of the State of Delaware (US-DE).

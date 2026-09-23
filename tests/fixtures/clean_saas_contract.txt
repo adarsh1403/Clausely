@@ -1,0 +1,15 @@
+MASTER SAAS SERVICES AGREEMENT
+
+This Master SaaS Services Agreement ("Agreement") is entered into as of January 1, 2025 ("Effective Date") through January 1, 2026 ("Expiration Date"), by and between CloudScale Technologies Inc. ("Vendor") and Acme Global Corp. ("Customer").
+
+1. FEES AND ANNUAL VALUE
+Customer shall pay Vendor an annual contract fee of $100,000.00 USD ("Annual Value").
+
+2. LIMITATION OF LIABILITY
+Each party's maximum aggregate liability under this Agreement shall not exceed $200,000.00 USD ("Liability Cap").
+
+3. TERM, AUTO-RENEWAL, AND TERMINATION
+This Agreement shall automatically renew for successive one-year terms unless either party provides written notice of non-renewal at least 30 days prior to the end of the current term. Either party may terminate this Agreement for convenience upon 30 days prior written notice.
+
+4. GOVERNING LAW
+This Agreement shall be governed by and construed in accordance with the laws of the State of Delaware (US-DE).

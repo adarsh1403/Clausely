@@ -54,11 +54,15 @@ def test_workflow_happy_path_compliant(workflow_db, monkeypatch):
     monkeypatch.setattr("app.workflow.nodes.extract_contract", mock_extract)
 
     graph = build_contract_graph()
-    final_state = graph.invoke({
-        "document_id": doc.id,
-        "raw_text": doc.raw_text,
-        "retry_count": 0,
-    })
+    config = {"configurable": {"thread_id": doc.id}}
+    final_state = graph.invoke(
+        {
+            "document_id": doc.id,
+            "raw_text": doc.raw_text,
+            "retry_count": 0,
+        },
+        config=config,
+    )
 
     assert final_state["status"] == "APPROVED"
     assert final_state["requires_human_review"] is False
@@ -80,11 +84,15 @@ def test_workflow_self_healing_retry(workflow_db, monkeypatch):
     monkeypatch.setattr("app.workflow.nodes.extract_contract", mock_extract)
 
     graph = build_contract_graph()
-    final_state = graph.invoke({
-        "document_id": doc.id,
-        "raw_text": doc.raw_text,
-        "retry_count": 0,
-    })
+    config = {"configurable": {"thread_id": doc.id}}
+    final_state = graph.invoke(
+        {
+            "document_id": doc.id,
+            "raw_text": doc.raw_text,
+            "retry_count": 0,
+        },
+        config=config,
+    )
 
     assert final_state["status"] == "APPROVED"
     assert final_state["retry_count"] == 1
@@ -105,11 +113,15 @@ def test_workflow_max_retries_exceeded(workflow_db, monkeypatch):
     monkeypatch.setattr("app.workflow.nodes.extract_contract", mock_extract)
 
     graph = build_contract_graph()
-    final_state = graph.invoke({
-        "document_id": doc.id,
-        "raw_text": doc.raw_text,
-        "retry_count": 0,
-    })
+    config = {"configurable": {"thread_id": doc.id}}
+    final_state = graph.invoke(
+        {
+            "document_id": doc.id,
+            "raw_text": doc.raw_text,
+            "retry_count": 0,
+        },
+        config=config,
+    )
 
     assert final_state["status"] == "FAILED"
     assert final_state["requires_human_review"] is True
@@ -141,11 +153,15 @@ def test_workflow_high_risk_compliance_flagged(workflow_db, monkeypatch):
     monkeypatch.setattr("app.workflow.nodes.extract_contract", mock_extract)
 
     graph = build_contract_graph()
-    final_state = graph.invoke({
-        "document_id": doc.id,
-        "raw_text": doc.raw_text,
-        "retry_count": 0,
-    })
+    config = {"configurable": {"thread_id": doc.id}}
+    final_state = graph.invoke(
+        {
+            "document_id": doc.id,
+            "raw_text": doc.raw_text,
+            "retry_count": 0,
+        },
+        config=config,
+    )
 
     assert final_state["status"] == "REVIEW_REQUIRED"
     assert final_state["requires_human_review"] is True

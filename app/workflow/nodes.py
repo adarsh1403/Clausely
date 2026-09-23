@@ -1,4 +1,5 @@
 from typing import Any
+from langgraph.types import interrupt
 from app.compliance import audit_contract_compliance
 from app.config import get_settings
 from app.database import SessionLocal
@@ -65,6 +66,63 @@ def audit_compliance_node(state: ContractState) -> dict[str, Any]:
         "compliance_findings": audit_result["compliance_findings"],
         "requires_human_review": audit_result["requires_human_review"],
         "status": audit_result["status"],
+    }
+
+
+# Node 4: Suspends execution via interrupt() for human review and handles resumption
+def human_review_interrupt_node(state: ContractState) -> dict[str, Any]:
+    # Persist intermediate waiting state to SQLite before suspending the graph
+    db = SessionLocal()
+    try:
+        update_document(
+            db,
+            state["document_id"],
+            status=state.get("status", "REVIEW_REQUIRED"),
+            extracted_data=state.get("extracted_data"),
+            compliance_findings=state.get("compliance_findings"),
+            retry_count=state.get("retry_count", 0),
+            requires_human_review=True,
+        )
+    finally:
+        db.close()
+
+    # Suspend execution and persist checkpoint until reviewer decision arrives
+    review_payload = interrupt({
+        "document_id": state["document_id"],
+        "status": state.get("status"),
+        "extracted_data": state.get("extracted_data"),
+        "compliance_findings": state.get("compliance_findings"),
+        "validation_errors": state.get("validation_errors", []),
+    })
+
+    # Process the human reviewer decision upon workflow resumption
+    decision = str(review_payload.get("decision", "")).strip().lower()
+    notes = review_payload.get("notes")
+    edited_data = review_payload.get("edited_data")
+
+    current_data = dict(state.get("extracted_data") or {})
+    current_findings = list(state.get("compliance_findings") or [])
+
+    if decision == "approve":
+        new_status = "APPROVED"
+    elif decision == "reject":
+        new_status = "REJECTED"
+    elif decision == "edit":
+        # Merge reviewer edits into extracted data and re-audit compliance
+        if edited_data:
+            current_data.update(edited_data)
+        audit_result = audit_contract_compliance(current_data)
+        current_findings = audit_result["compliance_findings"]
+        new_status = "APPROVED"
+    else:
+        new_status = state.get("status", "REVIEW_REQUIRED")
+
+    return {
+        "extracted_data": current_data,
+        "compliance_findings": current_findings,
+        "human_decision": decision,
+        "reviewer_notes": notes,
+        "status": new_status,
     }
 
 

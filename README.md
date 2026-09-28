@@ -93,6 +93,7 @@ Clausely processes SaaS and vendor agreements automatically. It parses contract 
 * **Self-Healing Reflection Loop:** If LLM extraction produces invalid fields or incorrect types, validation errors are fed directly back into the LLM prompt for automatic correction up to a configurable retry limit.
 * **Deterministic Compliance Engine:** Audits liability caps, governing law jurisdictions, renewal notice periods, and termination notice periods using explicit business logic.
 * **Stateful Human-in-the-Loop (HITL):** Uses LangGraph checkpoints and `interrupt()` to pause workflow threads for high-risk contracts or exhausted retries until a reviewer approves, rejects, or edits fields via the API.
+* **Zero-Dependency Web Interface:** Built-in lightweight UI served directly by FastAPI (zero Node/npm tooling or frontend build steps) for uploading contracts, tracking status, inspecting extracted terms, and performing human reviews.
 * **100% Configurable:** No hardcoded policy rules, retry thresholds, or model identifiers. Everything is driven by environment variables.
 * **Clean & Simple Codebase:** Written following explicit, novice-friendly code style without unnecessary layers, wrappers, or over-engineered abstractions.
 
@@ -167,6 +168,16 @@ uvicorn app.api:app --reload --host 0.0.0.0 --port 8000
 
 Open the web interface at **[http://127.0.0.1:8000](http://127.0.0.1:8000)** or interactive Swagger documentation at **[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)**.
 
+### 6. Using the Web Interface
+
+Clausely includes a built-in, zero-dependency web interface served directly by FastAPI:
+
+1. Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** in your browser.
+2. **Upload**: Select a `.pdf` / `.txt` contract file or paste raw contract text directly into the form.
+3. **Queue**: View all submitted documents with status badges (`PROCESSING`, `APPROVED`, `REVIEW_REQUIRED`, `REJECTED`, `FAILED`). Use the **Refresh** button to update the queue.
+4. **Inspect Terms**: Click on any document to view its extracted structured terms (vendor, dates, annual value, liability cap, governing law, renewal terms) alongside the compliance rule audit findings.
+5. **Human-in-the-Loop Review**: If a contract triggers `REVIEW_REQUIRED` (or `FAILED`), review the flags and submit an **Approve**, **Reject**, or **Edit Fields** decision with optional reviewer notes.
+
 ---
 
 ## Configuration Reference
@@ -190,6 +201,14 @@ All application parameters are configured via environment variables or a local `
 ---
 
 ## API Reference
+
+### 0. Web Interface
+Serves the minimal single-page web interface.
+
+* **Endpoint:** `GET /`
+* **Response:** HTML page (`text/html`)
+
+---
 
 ### 1. Upload Document
 Upload contract text or a PDF file to begin processing.
@@ -337,6 +356,43 @@ List all documents in the system with optional status filtering.
 
 ---
 
+## Sample Contract for Testing
+
+You can paste this realistic commercial agreement directly into the web interface (`http://127.0.0.1:8000`) or send it via the `/documents/upload` API:
+
+```text
+MASTER SERVICES AND SOFTWARE LICENSE AGREEMENT
+
+This Master Services and Software License Agreement (this "Agreement") is entered into and made effective as of June 1, 2025 (the "Effective Date"), by and between:
+
+Nexient Cloud Solutions, Inc., a Delaware corporation having its principal place of business at 452 Innovation Boulevard, Suite 700, Wilmington, DE 19801 ("Vendor"), 
+and 
+Vanguard Media Holdings, Inc., a Delaware corporation having its principal office at 1221 Avenue of the Americas, New York, NY 10020 ("Customer").
+
+1. TERM AND EXPIRATION
+This Agreement commences on the Effective Date and shall remain in effect until June 1, 2026 (the "Expiration Date").
+
+2. FEES AND PAYMENT
+Customer shall pay an annual subscription fee of $120,000.00 USD ("Annual Contract Value"), payable annually in advance.
+
+3. LIMITATION OF LIABILITY
+Neither party's total aggregate cumulative liability arising out of or related to this Agreement shall exceed $200,000.00 USD.
+
+4. RENEWAL TERMS
+This Agreement shall automatically renew for successive 12-month terms unless either party provides written notice of non-renewal at least 45 days prior to expiration.
+
+5. TERMINATION
+Either party may terminate this Agreement for convenience upon 60 days prior written notice.
+
+6. GOVERNING LAW
+This Agreement shall be governed by and construed in accordance with the laws of the State of Delaware (US-DE).
+```
+
+* **Expected Result:** Extracts all fields and automatically reaches status **`APPROVED`** (all 4 compliance rules pass).
+* **Test Human Review:** Change `Delaware (US-DE)` to `Cayman Islands (KY-CAYMAN)` or raise the liability cap above `$240,000.00` to observe the workflow pause at **`REVIEW_REQUIRED`**.
+
+---
+
 ## Running Tests
 
 Run the full automated test suite:
@@ -357,6 +413,8 @@ pytest -q
 ```text
 Clausely/
 ├── app/                        # Application source code
+│   ├── static/                 # Embedded web interface
+│   │   └── index.html          # Lightweight single-page HTML/CSS/JS UI
 │   ├── workflow/               # LangGraph workflow definitions
 │   │   ├── __init__.py
 │   │   ├── graph.py            # Graph assembly & state machine routing

@@ -69,10 +69,18 @@ def extract_contract(
     prompt = build_extraction_prompt(raw_text, validation_errors)
     response = active_llm.invoke(prompt)
 
-    # Handle LangChain message objects or raw string returns
-    if isinstance(response, AIMessage):
-        content = str(response.content)
+    # Extract text content whether returned as a string or list of content blocks
+    raw_content = response.content if isinstance(response, AIMessage) else response
+    if isinstance(raw_content, list):
+        # Extract text field from block dictionaries or strings in list
+        parts = []
+        for part in raw_content:
+            if isinstance(part, dict) and "text" in part:
+                parts.append(str(part["text"]))
+            else:
+                parts.append(str(part))
+        content = "".join(parts)
     else:
-        content = str(response)
+        content = str(raw_content)
 
     return clean_json_response(content)

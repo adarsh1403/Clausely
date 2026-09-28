@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clausely - Contract Auditor</title>
+  <style>
+    /* Basic reset and typography */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+      color: #1e293b;
+      background-color: #f8fafc;
+      padding: 1.5rem;
+    }
+    header {
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 0.75rem;
+    }
+    h1 { font-size: 1.5rem; font-weight: 700; color: #0f172a; }
+    h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem; color: #1e293b; }
+    h3 { font-size: 1rem; font-weight: 600; margin: 1rem 0 0.5rem; color: #334155; }
+    p { font-size: 0.9rem; color: #64748b; }
+
+    /* Layout grid */
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 900px) {
+      .container { grid-template-columns: 1fr; }
+    }
+
+    /* Cards */
+    .card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    /* Form inputs and buttons */
+    .form-group { margin-bottom: 1rem; }
+    label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.25rem; color: #334155; }
+    input[type="text"], input[type="file"], textarea {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #fff;
+    }
+    textarea { resize: vertical; min-height: 90px; font-family: monospace; }
+    button {
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      transition: background-color 0.15s ease;
+    }
+    .btn-primary { background-color: #2563eb; color: #fff; }
+    .btn-primary:hover { background-color: #1d4ed8; }
+    .btn-secondary { background-color: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+    .btn-secondary:hover { background-color: #e2e8f0; }
+    .btn-success { background-color: #16a34a; color: #fff; }
+    .btn-success:hover { background-color: #15803d; }
+    .btn-danger { background-color: #dc2626; color: #fff; }
+    .btn-danger:hover { background-color: #b91c1c; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin-top: 0.5rem; }
+    th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #f1f5f9; }
+    th { font-weight: 600; color: #475569; background: #f8fafc; }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover { background: #f8fafc; }
+    tr.selected { background: #eff6ff; }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 9999px;
+      text-transform: uppercase;
+    }
+    .badge-APPROVED { background: #dcfce7; color: #15803d; }
+    .badge-PROCESSING { background: #dbeafe; color: #1d4ed8; }
+    .badge-REVIEW_REQUIRED { background: #fef3c7; color: #b45309; }
+    .badge-REJECTED, .badge-FAILED { background: #fee2e2; color: #b91c1c; }
+    .badge-pass { background: #dcfce7; color: #15803d; }
+    .badge-fail { background: #fee2e2; color: #b91c1c; }
+
+    /* Key-Value detail list */
+    .kv-list { display: grid; grid-template-columns: 140px 1fr; gap: 0.4rem 0.75rem; font-size: 0.875rem; }
+    .kv-label { color: #64748b; font-weight: 500; }
+    .kv-value { color: #0f172a; word-break: break-all; }
+
+    /* Review box */
+    .review-box {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 6px;
+    }
+    .review-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Clausely</h1>
+    <p>Autonomous contract extraction and compliance auditing system</p>
+  </header>
+
+  <main class="container">
+    <!-- Left Column: Upload & Queue -->
+    <div>
+      <!-- Upload Contract Card -->
+      <section class="card">
+        <h2>Upload Contract</h2>
+        <form id="uploadForm">
+          <div class="form-group">
+            <label for="contractFile">Choose Contract File (.pdf, .txt)</label>
+            <input type="file" id="contractFile" accept=".pdf,.txt">
+          </div>
+          <div class="form-group">
+            <label for="rawTextInput">Or Paste Raw Contract Text</label>
+            <textarea id="rawTextInput" placeholder="Paste full agreement text here..."></textarea>
+          </div>
+          <button type="submit" id="uploadBtn" class="btn-primary">Upload & Audit</button>
+          <span id="uploadStatus" style="font-size:0.85rem; margin-left:0.5rem; color:#64748b;"></span>
+        </form>
+      </section>
+
+      <!-- Contracts Queue Card -->
+      <section class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h2>Contract Documents</h2>
+          <button id="refreshBtn" class="btn-secondary" style="font-size:0.8rem; padding:0.25rem 0.6rem;">Refresh</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Filename</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="documentsTableBody">
+              <tr><td colspan="3" style="text-align:center; color:#94a3b8;">Loading documents...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- Right Column: Document Details & Review -->
+    <div>
+      <section class="card" id="detailCard">
+        <h2>Document Details</h2>
+        <div id="detailContent">
+          <p>Select a document from the queue to view extraction results and compliance findings.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    // Tracks the currently selected document ID
+    let selectedDocumentId = null;
+
+    // Loads the list of documents from the API and populates the table
+    async function loadDocuments() {
+      try {
+        const response = await fetch("/documents");
+        if (!response.ok) return;
+        const documents = await response.json();
+
+        const tbody = document.getElementById("documentsTableBody");
+        if (documents.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#94a3b8;">No documents found</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = documents.map(doc => {
+          const isSelected = doc.id === selectedDocumentId ? "selected" : "";
+          const created = doc.created_at ? new Date(doc.created_at).toLocaleTimeString() : "";
+          return `
+            <tr class="clickable ${isSelected}" onclick="selectDocument('${doc.id}')">
+              <td><strong>${escapeHtml(doc.filename)}</strong></td>
+              <td><span class="badge badge-${doc.status}">${doc.status}</span></td>
+              <td style="color:#64748b; font-size:0.8rem;">${created}</td>
+            </tr>
+          `;
+        }).join("");
+      } catch (err) {
+        console.error("Failed to fetch documents:", err);
+      }
+    }
+
+    // Handles contract file or text upload
+    document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fileInput = document.getElementById("contractFile");
+      const textInput = document.getElementById("rawTextInput");
+      const statusLabel = document.getElementById("uploadStatus");
+      const uploadBtn = document.getElementById("uploadBtn");
+
+      const file = fileInput.files[0];
+      const rawText = textInput.value.trim();
+
+      if (!file && !rawText) {
+        alert("Please select a file or enter contract text.");
+        return;
+      }
+
+      uploadBtn.disabled = true;
+      statusLabel.textContent = "Uploading...";
+
+      const formData = new FormData();
+      if (file) {
+        formData.append("file", file);
+      } else {
+        formData.append("raw_text", rawText);
+        formData.append("filename", "manual_input.txt");
+      }
+
+      try {
+        const response = await fetch("/documents/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          alert("Upload failed: " + (errorData.detail || "Server error"));
+          return;
+        }
+
+        const result = await response.json();
+        statusLabel.textContent = "Uploaded! Processing...";
+        fileInput.value = "";
+        textInput.value = "";
+        selectedDocumentId = result.document_id;
+        await loadDocuments();
+        await loadDocumentDetails(selectedDocumentId);
+      } catch (err) {
+        alert("Upload error: " + err.message);
+      } finally {
+        uploadBtn.disabled = false;
+        setTimeout(() => { statusLabel.textContent = ""; }, 3000);
+      }
+    });
+
+    // Selects a document and loads its full details
+    async function selectDocument(docId) {
+      selectedDocumentId = docId;
+      await loadDocuments();
+      await loadDocumentDetails(docId);
+    }
+
+    // Fetches and renders detailed view for a specific document
+    async function loadDocumentDetails(docId) {
+      const container = document.getElementById("detailContent");
+      try {
+        const response = await fetch(`/documents/${docId}`);
+        if (!response.ok) {
+          container.innerHTML = "<p>Failed to load document details.</p>";
+          return;
+        }
+        const doc = await response.json();
+
+        let html = `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <div>
+              <h3 style="margin:0;">${escapeHtml(doc.filename)}</h3>
+              <p style="font-size:0.75rem; color:#94a3b8;">ID: ${doc.id}</p>
+            </div>
+            <span class="badge badge-${doc.status}">${doc.status}</span>
+          </div>
+        `;
+
+        // Render extracted structured data if present
+        if (doc.extracted_data) {
+          const d = doc.extracted_data;
+          html += `
+            <h3>Extracted Contract Terms</h3>
+            <div class="kv-list">
+              <span class="kv-label">Vendor:</span><span class="kv-value">${escapeHtml(d.vendor_name || "-")}</span>
+              <span class="kv-label">Customer:</span><span class="kv-value">${escapeHtml(d.customer_name || "-")}</span>
+              <span class="kv-label">Effective Date:</span><span class="kv-value">${d.effective_date || "-"}</span>
+              <span class="kv-label">Expiration Date:</span><span class="kv-value">${d.expiration_date || "-"}</span>
+              <span class="kv-label">Annual Value:</span><span class="kv-value">${d.annual_value != null ? "$" + Number(d.annual_value).toLocaleString() : "-"}</span>
+              <span class="kv-label">Liability Cap:</span><span class="kv-value">${d.liability_cap_amount != null ? "$" + Number(d.liability_cap_amount).toLocaleString() : "-"}</span>
+              <span class="kv-label">Governing Law:</span><span class="kv-value">${escapeHtml(d.governing_law || "-")}</span>
+              <span class="kv-label">Auto Renewal:</span><span class="kv-value">${d.auto_renewal ? "Yes" : "No"}</span>
+              <span class="kv-label">Renewal Notice:</span><span class="kv-value">${d.renewal_notice_days ?? 0} days</span>
+              <span class="kv-label">Termination Notice:</span><span class="kv-value">${d.termination_notice_days ?? 0} days</span>
+            </div>
+          `;
+        } else if (doc.status === "PROCESSING") {
+          html += `<p style="margin:1rem 0; color:#2563eb;">Processing contract... extracting fields and auditing compliance.</p>`;
+        } else {
+          html += `<p style="margin:1rem 0; color:#64748b;">No structured extraction available.</p>`;
+        }
+
+        // Render compliance audit findings if present
+        if (doc.compliance_findings && doc.compliance_findings.length > 0) {
+          html += `
+            <h3>Compliance Audit Findings</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Rule</th>
+                  <th>Status</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${doc.compliance_findings.map(f => `
+                  <tr>
+                    <td><strong>${escapeHtml(f.rule || "")}</strong></td>
+                    <td><span class="badge badge-${f.passed ? 'pass' : 'fail'}">${f.passed ? 'PASS' : 'FAIL'}</span></td>
+                    <td style="font-size:0.8rem; color:#475569;">${escapeHtml(f.message || "")}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          `;
+        }
+
+        // Render human review section if review is required or already reviewed
+        if (doc.status === "REVIEW_REQUIRED" || doc.status === "FAILED") {
+          html += `
+            <div class="review-box">
+              <h3 style="margin-top:0; color:#92400e;">Human Review Required</h3>
+              <p style="color:#78350f; font-size:0.85rem; margin-bottom:0.5rem;">
+                This contract requires human decision due to high-risk terms or validation failure.
+              </p>
+              <div class="form-group" style="margin-bottom:0.5rem;">
+                <label for="reviewNotes">Reviewer Notes (Optional)</label>
+                <input type="text" id="reviewNotes" placeholder="Enter comments or justification...">
+              </div>
+              <div class="review-actions">
+                <button class="btn-success" onclick="submitReview('${doc.id}', 'approve')">Approve Contract</button>
+                <button class="btn-danger" onclick="submitReview('${doc.id}', 'reject')">Reject Contract</button>
+                <button class="btn-secondary" onclick="toggleEditMode('${doc.id}')">Edit Fields</button>
+              </div>
+              <div id="editFieldsContainer" style="display:none; margin-top:0.75rem;">
+                <label for="editJsonText">Edit Extracted JSON Data:</label>
+                <textarea id="editJsonText" style="min-height:140px;">${escapeHtml(JSON.stringify(doc.extracted_data || {}, null, 2))}</textarea>
+                <button class="btn-primary" style="margin-top:0.5rem;" onclick="submitEditReview('${doc.id}')">Save Edits & Submit</button>
+              </div>
+            </div>
+          `;
+        } else if (doc.reviewer_decision) {
+          html += `
+            <div style="margin-top:1rem; padding:0.75rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">
+              <h3 style="margin:0 0 0.25rem 0;">Human Review Recorded</h3>
+              <p style="font-size:0.85rem;"><strong>Decision:</strong> ${doc.reviewer_decision.toUpperCase()}</p>
+              ${doc.reviewer_notes ? `<p style="font-size:0.85rem;"><strong>Notes:</strong> ${escapeHtml(doc.reviewer_notes)}</p>` : ""}
+            </div>
+          `;
+        }
+
+        container.innerHTML = html;
+      } catch (err) {
+        console.error("Failed to load document details:", err);
+      }
+    }
+
+    // Toggles the visibility of the edit JSON form
+    function toggleEditMode(docId) {
+      const container = document.getElementById("editFieldsContainer");
+      if (container) {
+        container.style.display = container.style.display === "none" ? "block" : "none";
+      }
+    }
+
+    // Submits an approve or reject decision for human-in-the-loop review
+    async function submitReview(docId, decision) {
+      const notes = document.getElementById("reviewNotes")?.value || "";
+      try {
+        const response = await fetch(`/documents/${docId}/review`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision, notes }),
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          alert("Review submission failed: " + (errorData.detail || "Server error"));
+          return;
+        }
+        await loadDocuments();
+        await loadDocumentDetails(docId);
+      } catch (err) {
+        alert("Failed to submit review: " + err.message);
+      }
+    }
+
+    // Submits edited contract fields as an 'edit' review decision
+    async function submitEditReview(docId) {
+      const notes = document.getElementById("reviewNotes")?.value || "";
+      const jsonArea = document.getElementById("editJsonText");
+      let editedData = null;
+      try {
+        editedData = JSON.parse(jsonArea.value);
+      } catch (e) {
+        alert("Invalid JSON format. Please correct it before saving.");
+        return;
+      }
+
+      try {
+        const response = await fetch(`/documents/${docId}/review`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "edit", edited_data: editedData, notes }),
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          alert("Edit review submission failed: " + (errorData.detail || "Server error"));
+          return;
+        }
+        await loadDocuments();
+        await loadDocumentDetails(docId);
+      } catch (err) {
+        alert("Failed to submit edits: " + err.message);
+      }
+    }
+
+    // Escapes special characters to prevent XSS injection
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // Wire refresh button and initial load
+    document.getElementById("refreshBtn").addEventListener("click", () => {
+      loadDocuments();
+      if (selectedDocumentId) loadDocumentDetails(selectedDocumentId);
+    });
+
+    loadDocuments();
+  </script>
+</body>
+</html>

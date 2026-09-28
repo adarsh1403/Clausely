@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from typing import Any, Optional
+from pathlib import Path
 from fastapi import (
     BackgroundTasks,
     Depends,
@@ -11,6 +12,7 @@ from fastapi import (
     Query,
     UploadFile,
 )
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app.database import get_db, init_db
 from app.extractor import extract_text_from_bytes
@@ -43,6 +45,16 @@ app = FastAPI(
 @lru_cache
 def get_workflow_graph() -> Any:
     return build_contract_graph()
+
+
+# Path to the static interface HTML file
+INDEX_FILE_PATH = Path(__file__).parent / "static" / "index.html"
+
+
+# Serves the minimal web interface
+@app.get("/", response_class=FileResponse)
+def serve_index() -> FileResponse:
+    return FileResponse(INDEX_FILE_PATH)
 
 
 # Uploads a contract file or raw text, creates a DB record, and starts workflow processing

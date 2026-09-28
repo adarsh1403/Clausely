@@ -5,7 +5,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-black.svg)](https://langchain-ai.github.io/langgraph/)
 [![Pydantic v2](https://img.shields.io/badge/Pydantic-v2-E92063.svg?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
-[![Tests Passing](https://img.shields.io/badge/tests-59%20passed-brightgreen.svg)]()
+[![Tests Passing](https://img.shields.io/badge/tests-60%20passed-brightgreen.svg)]()
 
 > **Autonomous contract extraction and compliance auditing system with stateful human-in-the-loop review.**
 
@@ -165,7 +165,7 @@ Or using `uvicorn` directly:
 uvicorn app.api:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Open interactive Swagger documentation at **[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)**.
+Open the web interface at **[http://127.0.0.1:8000](http://127.0.0.1:8000)** or interactive Swagger documentation at **[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)**.
 
 ---
 

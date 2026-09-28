@@ -209,3 +209,11 @@ def test_api_missing_document_returns_404(api_client):
         json={"decision": "approve"},
     )
     assert review_res.status_code == 404
+
+
+# Tests serving the root minimal interface HTML page
+def test_serve_index_page(api_client):
+    response = api_client.get("/")
+    assert response.status_code == 200
+    assert "Clausely" in response.text
+

@@ -38,7 +38,7 @@ env/
 *.env
 
 # SQLite databases & lock files
-*.db
+*.db*
 *.db-journal
 *.sqlite
 *.sqlite3

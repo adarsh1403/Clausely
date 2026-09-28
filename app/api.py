@@ -13,6 +13,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import FileResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import get_db, init_db
 from app.extractor import extract_text_from_bytes
@@ -55,6 +56,23 @@ INDEX_FILE_PATH = Path(__file__).parent / "static" / "index.html"
 @app.get("/", response_class=FileResponse)
 def serve_index() -> FileResponse:
     return FileResponse(INDEX_FILE_PATH)
+
+
+# Verifies server readiness and database connectivity
+@app.get("/health")
+def health_check(db: Session = Depends(get_db)) -> dict[str, str]:
+    # Check that database connection responds to a simple query
+    try:
+        db.execute(text("SELECT 1"))
+        db_status = "connected"
+    except Exception:
+        db_status = "error"
+
+    return {
+        "status": "healthy" if db_status == "connected" else "unhealthy",
+        "database": db_status,
+        "version": "1.0.0",
+    }
 
 
 # Uploads a contract file or raw text, creates a DB record, and starts workflow processing
@@ -159,3 +177,57 @@ def get_documents_list(
 ) -> list[dict[str, Any]]:
     documents = list_documents(db, status=status)
     return [doc.to_dict() for doc in documents]
+
+
+# Generates a formatted compliance audit report
+@app.get("/documents/{document_id}/report")
+def get_document_report(
+    document_id: str,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    document = get_document_by_id(db, document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    # Build markdown report lines
+    lines = [
+        "# Clausely Compliance Audit Report",
+        f"- Document: {document.filename}",
+        f"- Document ID: {document.id}",
+        f"- Status: {document.status}",
+        f"- Requires Review: {'Yes' if document.requires_human_review else 'No'}",
+        "",
+        "## Extracted Terms",
+    ]
+
+    if document.extracted_data:
+        for key, value in document.extracted_data.items():
+            lines.append(f"- {key}: {value}")
+    else:
+        lines.append("- No extracted terms available.")
+
+    lines.append("")
+    lines.append("## Compliance Findings")
+    if document.compliance_findings:
+        for finding in document.compliance_findings:
+            outcome = "PASS" if finding.get("passed") else "FAIL"
+            severity = finding.get("severity", "INFO")
+            rule = finding.get("rule", "RULE")
+            message = finding.get("message", "")
+            lines.append(f"- [{outcome}] [{severity}] {rule}: {message}")
+    else:
+        lines.append("- No compliance findings recorded.")
+
+    if document.reviewer_decision:
+        lines.append("")
+        lines.append("## Human Review Log")
+        lines.append(f"- Decision: {document.reviewer_decision.upper()}")
+        if document.reviewer_notes:
+            lines.append(f"- Notes: {document.reviewer_notes}")
+
+    return {
+        "document_id": document.id,
+        "filename": document.filename,
+        "status": document.status,
+        "report_markdown": "\n".join(lines),
+    }

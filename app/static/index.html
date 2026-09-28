@@ -117,9 +117,15 @@
 </head>
 <body>
 
-  <header>
-    <h1>Clausely</h1>
-    <p>Autonomous contract extraction and compliance auditing system</p>
+  <header style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+    <div>
+      <h1>Clausely</h1>
+      <p>Autonomous contract extraction and compliance auditing system</p>
+    </div>
+    <div style="display:flex; gap:0.75rem; font-size:0.85rem;">
+      <a href="/docs" target="_blank" style="color:#2563eb; text-decoration:none; font-weight:500;">API Docs (Swagger) &nearr;</a>
+      <a href="/health" target="_blank" style="color:#2563eb; text-decoration:none; font-weight:500;">System Health &nearr;</a>
+    </div>
   </header>
 
   <main class="container">
@@ -134,8 +140,16 @@
             <input type="file" id="contractFile" accept=".pdf,.txt">
           </div>
           <div class="form-group">
-            <label for="rawTextInput">Or Paste Raw Contract Text</label>
-            <textarea id="rawTextInput" placeholder="Paste full agreement text here..."></textarea>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem; flex-wrap:wrap; gap:0.25rem;">
+              <label for="rawTextInput" style="margin-bottom:0;">Or Paste Raw Contract Text</label>
+              <div style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap;">
+                <span style="font-size:0.75rem; color:#64748b;">Try Sample:</span>
+                <button type="button" class="btn-secondary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="loadSample('compliant')">Compliant SaaS</button>
+                <button type="button" class="btn-secondary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="loadSample('high_risk')">High Liability</button>
+                <button type="button" class="btn-secondary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="loadSample('disapproved')">Cayman Law</button>
+              </div>
+            </div>
+            <textarea id="rawTextInput" placeholder="Paste full agreement text here or choose a sample above..."></textarea>
           </div>
           <button type="submit" id="uploadBtn" class="btn-primary">Upload & Audit</button>
           <span id="uploadStatus" style="font-size:0.85rem; margin-left:0.5rem; color:#64748b;"></span>
@@ -179,6 +193,39 @@
   <script>
     // Tracks the currently selected document ID
     let selectedDocumentId = null;
+
+    // Active sample filename when loaded via sample buttons
+    let currentSampleFilename = null;
+
+    // Realistic contract templates for immediate one-click testing
+    const SAMPLES = {
+      compliant: {
+        filename: "sample_clean_saas.txt",
+        text: `MASTER SAAS SERVICES AGREEMENT\n\nThis Master SaaS Services Agreement ("Agreement") is entered into as of January 1, 2025 ("Effective Date") through January 1, 2026 ("Expiration Date"), by and between CloudScale Technologies Inc. ("Vendor") and Acme Global Corp. ("Customer").\n\n1. FEES AND ANNUAL VALUE\nCustomer shall pay Vendor an annual contract fee of $100,000.00 USD ("Annual Value").\n\n2. LIMITATION OF LIABILITY\nEach party's maximum aggregate liability under this Agreement shall not exceed $200,000.00 USD ("Liability Cap").\n\n3. TERM, AUTO-RENEWAL, AND TERMINATION\nThis Agreement shall automatically renew for successive one-year terms unless either party provides written notice of non-renewal at least 30 days prior to the end of the current term. Either party may terminate this Agreement for convenience upon 30 days prior written notice.\n\n4. GOVERNING LAW\nThis Agreement shall be governed by and construed in accordance with the laws of the State of Delaware (US-DE).`
+      },
+      high_risk: {
+        filename: "sample_high_risk_liability.txt",
+        text: `ENTERPRISE VENDOR SERVICES AGREEMENT\n\nThis Enterprise Vendor Services Agreement ("Agreement") is entered into as of February 1, 2025 ("Effective Date") through February 1, 2026 ("Expiration Date"), by and between MegaData Systems LLC ("Vendor") and Acme Global Corp. ("Customer").\n\n1. ANNUAL VALUE\nThe total annual subscription value is $150,000.00 USD.\n\n2. LIMITATION OF LIABILITY\nAggregate liability under this Agreement is capped at $900,000.00 USD, which exceeds standard corporate policy thresholds.\n\n3. RENEWAL AND TERMINATION\nThis Agreement does not automatically renew. Either party may terminate for convenience with 30 days written notice.\n\n4. GOVERNING LAW\nThis Agreement is governed by the laws of the State of Delaware (US-DE).`
+      },
+      disapproved: {
+        filename: "sample_cayman_law.txt",
+        text: `SOFTWARE LICENSE AGREEMENT\n\nThis Software License Agreement ("Agreement") is effective as of March 1, 2025 through March 1, 2026, between IslandSoft Ltd. ("Vendor") and Acme Global Corp. ("Customer").\n\n1. ANNUAL LICENSE FEE\nAnnual license fee: $80,000.00 USD.\n\n2. LIABILITY CAP\nMaximum total liability is capped at $120,000.00 USD.\n\n3. RENEWAL AND TERMINATION\nNo automatic renewal applies. Termination for convenience requires 45 days prior written notice.\n\n4. GOVERNING LAW\nThis Agreement shall be governed by the laws of the Cayman Islands (KY-CAYMAN).`
+      }
+    };
+
+    // Populates the contract textarea with a pre-configured sample contract
+    function loadSample(key) {
+      const sample = SAMPLES[key];
+      if (!sample) return;
+      document.getElementById("contractFile").value = "";
+      document.getElementById("rawTextInput").value = sample.text;
+      currentSampleFilename = sample.filename;
+      const statusLabel = document.getElementById("uploadStatus");
+      statusLabel.textContent = `Loaded ${sample.filename}`;
+      setTimeout(() => {
+        if (statusLabel.textContent.startsWith("Loaded")) statusLabel.textContent = "";
+      }, 2500);
+    }
 
     // Loads the list of documents from the API and populates the table
     async function loadDocuments() {
@@ -226,14 +273,14 @@
       }
 
       uploadBtn.disabled = true;
-      statusLabel.textContent = "Uploading...";
+      statusLabel.textContent = "Uploading & processing...";
 
       const formData = new FormData();
       if (file) {
         formData.append("file", file);
       } else {
         formData.append("raw_text", rawText);
-        formData.append("filename", "manual_input.txt");
+        formData.append("filename", currentSampleFilename || "manual_input.txt");
       }
 
       try {
@@ -252,6 +299,7 @@
         statusLabel.textContent = "Uploaded! Processing...";
         fileInput.value = "";
         textInput.value = "";
+        currentSampleFilename = null;
         selectedDocumentId = result.document_id;
         await loadDocuments();
         await loadDocumentDetails(selectedDocumentId);
@@ -282,12 +330,15 @@
         const doc = await response.json();
 
         let html = `
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
             <div>
               <h3 style="margin:0;">${escapeHtml(doc.filename)}</h3>
               <p style="font-size:0.75rem; color:#94a3b8;">ID: ${doc.id}</p>
             </div>
-            <span class="badge badge-${doc.status}">${doc.status}</span>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <button class="btn-secondary" id="copyReportBtn" style="font-size:0.75rem; padding:0.25rem 0.55rem;" onclick="copyAuditReport('${doc.id}')" title="Copy markdown audit report">📋 Copy Report</button>
+              <span class="badge badge-${doc.status}">${doc.status}</span>
+            </div>
           </div>
         `;
 
@@ -310,7 +361,16 @@
             </div>
           `;
         } else if (doc.status === "PROCESSING") {
-          html += `<p style="margin:1rem 0; color:#2563eb;">Processing contract... extracting fields and auditing compliance.</p>`;
+          html += `
+            <div style="margin:1rem 0; padding:1rem; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px;">
+              <p style="color:#1d4ed8; font-weight:500; margin:0;">
+                Processing contract with Gemini LLM & auditing compliance...
+              </p>
+              <p style="font-size:0.8rem; color:#60a5fa; margin-top:0.25rem;">
+                This page will update automatically when extraction completes.
+              </p>
+            </div>
+          `;
         } else {
           html += `<p style="margin:1rem 0; color:#64748b;">No structured extraction available.</p>`;
         }
@@ -374,9 +434,48 @@
           `;
         }
 
+        // Render source contract text accordion if present
+        if (doc.raw_text) {
+          html += `
+            <details style="margin-top:1.25rem; border-top:1px solid #e2e8f0; padding-top:0.75rem;">
+              <summary style="cursor:pointer; font-size:0.85rem; font-weight:600; color:#475569;">
+                View Original Contract Text (${doc.raw_text.length} chars)
+              </summary>
+              <pre style="margin-top:0.5rem; padding:0.75rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; font-size:0.8rem; line-height:1.45; white-space:pre-wrap; max-height:220px; overflow-y:auto; color:#334155;">${escapeHtml(doc.raw_text)}</pre>
+            </details>
+          `;
+        }
+
         container.innerHTML = html;
+
+        // Auto-poll if document is currently in processing state
+        if (doc.status === "PROCESSING") {
+          setTimeout(() => {
+            if (selectedDocumentId === docId) {
+              loadDocuments();
+              loadDocumentDetails(docId);
+            }
+          }, 2000);
+        }
       } catch (err) {
         console.error("Failed to load document details:", err);
+      }
+    }
+
+    // Copies markdown audit report to user clipboard
+    async function copyAuditReport(docId) {
+      const btn = document.getElementById("copyReportBtn");
+      try {
+        const response = await fetch(`/documents/${docId}/report`);
+        if (!response.ok) throw new Error("Could not fetch audit report");
+        const data = await response.json();
+        await navigator.clipboard.writeText(data.report_markdown);
+        if (btn) {
+          btn.textContent = "✓ Copied!";
+          setTimeout(() => { btn.textContent = "📋 Copy Report"; }, 2000);
+        }
+      } catch (err) {
+        alert("Failed to copy report: " + err.message);
       }
     }
 

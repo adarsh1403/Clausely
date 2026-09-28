@@ -217,3 +217,39 @@ def test_serve_index_page(api_client):
     assert response.status_code == 200
     assert "Clausely" in response.text
 
+
+# Tests service health check and database connectivity
+def test_api_health_check(api_client):
+    response = api_client.get("/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "healthy"
+    assert data["database"] == "connected"
+    assert data["version"] == "1.0.0"
+
+
+# Tests generating compliance audit report for an existing document
+def test_api_get_document_report(api_client, monkeypatch):
+    mock_extract = MagicMock(return_value=get_compliant_json())
+    monkeypatch.setattr("app.workflow.nodes.extract_contract", mock_extract)
+
+    upload_res = api_client.post(
+        "/documents/upload",
+        data={"raw_text": "Sample text", "filename": "report_test.txt"},
+    )
+    doc_id = upload_res.json()["document_id"]
+
+    report_res = api_client.get(f"/documents/{doc_id}/report")
+    assert report_res.status_code == 200
+    report_data = report_res.json()
+    assert report_data["document_id"] == doc_id
+    assert report_data["filename"] == "report_test.txt"
+    assert "Clausely Compliance Audit Report" in report_data["report_markdown"]
+    assert "Acme Cloud Ltd" in report_data["report_markdown"]
+
+
+# Tests that requesting a report for a nonexistent document returns 404
+def test_api_get_document_report_not_found(api_client):
+    report_res = api_client.get("/documents/nonexistent-id/report")
+    assert report_res.status_code == 404
+
